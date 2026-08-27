@@ -1,26 +1,26 @@
 from pydantic import BaseModel, Field
 
 
-class Scenario(BaseModel):
-    area: str = Field(
-        ...,
-        description="Area where heat mitigation resources should be deployed",
-    )
+class Worker(BaseModel):
+    id: str
+    name: str
+    latitude: float
+    longitude: float
+    task: str
+    exposure_minutes: int = Field(default=0, ge=0)
+    status: str = "working"
+    buddy_id: str | None = None
 
-    candidate_locations: list[str] = Field(
-        ...,
-        min_length=1,
-        description="Candidate locations to evaluate",
-    )
 
-    available_resources: int = Field(
-        ...,
-        gt=0,
-        description="Number of available intervention resources",
-    )
+class Incident(BaseModel):
+    id: str
+    worker_id: str
+    type: str
+    status: str = "active"
+    actions_taken: list[str] = Field(default_factory=list)
 
-    intervention_options: list[str] = Field(
-        ...,
-        min_length=1,
-        description="Available heat mitigation interventions",
-    )
+
+class SafetyState(BaseModel):
+    workers: list[Worker] = Field(default_factory=list)
+    incidents: list[Incident] = Field(default_factory=list)
+    agent_actions: list[str] = Field(default_factory=list)

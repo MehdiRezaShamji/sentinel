@@ -2,48 +2,25 @@ import { useState } from "react";
 import "./index.css";
 
 function App() {
-  const [area, setArea] = useState("Mumbai");
-  const [locations, setLocations] = useState(
-    "Location A, Location B, Location C"
-  );
-  const [resources, setResources] = useState(2);
-  const [interventions, setInterventions] = useState(
-    "Cooling center, Shade structure, Water station"
-  );
-
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  async function analyzeScenario() {
+  async function runAgent() {
     setLoading(true);
     setError(null);
     setResult(null);
 
-    const scenario = {
-      area,
-      candidate_locations: locations
-        .split(",")
-        .map((location) => location.trim())
-        .filter(Boolean),
-      available_resources: Number(resources),
-      intervention_options: interventions
-        .split(",")
-        .map((intervention) => intervention.trim())
-        .filter(Boolean),
-    };
-
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(scenario),
-      });
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/agent/run",
+        {
+          method: "POST",
+        }
+      );
 
       if (!response.ok) {
-        throw new Error("Analysis request failed.");
+        throw new Error("Agent request failed.");
       }
 
       const data = await response.json();
@@ -59,245 +36,263 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">H</div>
+          <div className="brand-mark">S</div>
 
           <div>
-            <div className="brand-name">Heat Resource</div>
-            <div className="brand-subtitle">Optimizer</div>
+            <div className="brand-name">Sentinel</div>
+            <div className="brand-subtitle">
+              Environmental Safety Agent
+            </div>
           </div>
         </div>
 
         <div className="system-status">
           <span className="status-dot" />
-          <span>Thermal intelligence system</span>
+          <span>Agent online</span>
         </div>
       </header>
 
       <main className="main-content">
         <section className="hero">
           <div className="hero-eyebrow">
-            CLIMATE RESOURCE INTELLIGENCE
+            AUTONOMOUS ENVIRONMENTAL SAFETY
           </div>
 
           <h1>
-            Make every heat-mitigation
-            <span> decision count.</span>
+            Your safety workforce,
+            <span> always watching.</span>
           </h1>
 
           <p>
-            Evaluate candidate locations, understand thermal severity,
-            and prioritize limited resources where they can have the
-            greatest impact.
+            Sentinel continuously observes environmental conditions,
+            monitors field workers, and executes safety-response
+            workflows when action is required.
           </p>
+
+          <button
+            className="analyze-button"
+            onClick={runAgent}
+            disabled={loading}
+          >
+            <span>
+              {loading ? "Agent is working..." : "Run safety agent"}
+            </span>
+
+            <span className="button-arrow">
+              {loading ? "…" : "→"}
+            </span>
+          </button>
         </section>
 
-        <section className="workspace">
-          <div className="scenario-card">
-            <div className="section-heading">
-              <div>
-                <span className="section-kicker">01</span>
-                <h2>Define your scenario</h2>
-              </div>
-
-              <span className="card-label">INPUT</span>
-            </div>
-
-            <div className="form-grid">
-              <label className="field field-full">
-                <span>Area</span>
-                <input
-                  value={area}
-                  onChange={(event) => setArea(event.target.value)}
-                  placeholder="e.g. Mumbai"
-                />
-              </label>
-
-              <label className="field field-full">
-                <span>Candidate locations</span>
-                <input
-                  value={locations}
-                  onChange={(event) => setLocations(event.target.value)}
-                  placeholder="Location A, Location B, Location C"
-                />
-                <small>Separate locations with commas.</small>
-              </label>
-
-              <label className="field">
-                <span>Available resources</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={resources}
-                  onChange={(event) => setResources(event.target.value)}
-                />
-              </label>
-
-              <label className="field">
-                <span>Intervention options</span>
-                <input
-                  value={interventions}
-                  onChange={(event) => setInterventions(event.target.value)}
-                  placeholder="Cooling center, shade..."
-                />
-              </label>
-            </div>
-
-            <button
-              className="analyze-button"
-              onClick={analyzeScenario}
-              disabled={loading}
-            >
-              <span>
-                {loading ? "Analyzing scenario" : "Analyze scenario"}
-              </span>
-
-              <span className="button-arrow">
-                {loading ? "…" : "→"}
-              </span>
-            </button>
+        {error && (
+          <div className="error-state">
+            <strong>Agent unavailable</strong>
+            <p>{error}</p>
           </div>
+        )}
 
-          <div className="overview-card">
-            <div className="section-heading">
-              <div>
-                <span className="section-kicker">02</span>
-                <h2>Priority overview</h2>
-              </div>
+        {loading && (
+          <section className="workspace">
+            <div className="overview-card agent-running">
+              <div className="loading-ring" />
 
-              <span className="card-label">OUTPUT</span>
+              <h2>Agent is working</h2>
+
+              <p>
+                Observing environmental conditions and evaluating
+                worker safety.
+              </p>
             </div>
+          </section>
+        )}
 
-            {!result && !loading && (
-              <div className="empty-state">
-                <div className="empty-icon">◎</div>
+        {result && !loading && (
+          <>
+            <section className="workspace">
+              <div className="overview-card">
+                <div className="section-heading">
+                  <div>
+                    <span className="section-kicker">01</span>
+                    <h2>Environment</h2>
+                  </div>
 
-                <h3>Ready for analysis</h3>
+                  <span className="card-label">FORTYGUARD</span>
+                </div>
 
-                <p>
-                  Configure your scenario and run the analysis to
-                  identify the locations requiring priority attention.
-                </p>
-              </div>
-            )}
-
-            {loading && (
-              <div className="empty-state">
-                <div className="loading-ring" />
-
-                <h3>Analyzing thermal conditions</h3>
-
-                <p>
-                  Evaluating candidate locations and optimizing the
-                  available resources.
-                </p>
-              </div>
-            )}
-
-            {error && (
-              <div className="error-state">
-                <strong>Analysis unavailable</strong>
-                <p>{error}</p>
-              </div>
-            )}
-
-            {result && (
-              <div className="results">
                 <div className="result-summary">
                   <div>
-                    <span>LOCATIONS EVALUATED</span>
-                    <strong>{result.analysis.locations_evaluated}</strong>
+                    <span>TEMPERATURE</span>
+                    <strong>
+                      {result.environment.temperature_c}°C
+                    </strong>
                   </div>
 
                   <div>
-                    <span>RESOURCES AVAILABLE</span>
-                    <strong>{resources}</strong>
+                    <span>HEAT INDEX</span>
+                    <strong>
+                      {result.environment.heat_index_c ?? "—"}°C
+                    </strong>
                   </div>
+
+                  <div>
+                    <span>WET BULB</span>
+                    <strong>
+                      {result.environment.wet_bulb_c ?? "—"}°C
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>HUMIDITY</span>
+                    <strong>
+                      {result.environment.humidity_percent ?? "—"}%
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overview-card">
+                <div className="section-heading">
+                  <div>
+                    <span className="section-kicker">02</span>
+                    <h2>Field workforce</h2>
+                  </div>
+
+                  <span className="card-label">
+                    {result.workers.length} WORKERS
+                  </span>
                 </div>
 
                 <div className="ranking">
-                  {result.analysis.heat_ranking.map((location, index) => (
-                    <div className="ranking-row" key={location.location}>
+                  {result.workers.map((worker) => (
+                    <div className="ranking-row" key={worker.id}>
                       <div className="rank-number">
-                        {String(index + 1).padStart(2, "0")}
+                        {worker.id}
                       </div>
 
                       <div className="rank-info">
                         <div className="rank-title">
-                          <span>{location.location}</span>
-                          <strong>{location.heat_score}</strong>
+                          <span>{worker.name}</span>
+
+                          <strong>
+                            {worker.status.replaceAll("_", " ")}
+                          </strong>
                         </div>
 
-                        <div className="score-track">
-                          <div
-                            className="score-fill"
-                            style={{
-                              width: `${location.heat_score}%`,
-                            }}
-                          />
-                        </div>
+                        <small>
+                          {worker.task} ·{" "}
+                          {worker.exposure_minutes} min exposure
+                        </small>
                       </div>
                     </div>
                   ))}
                 </div>
+              </div>
+            </section>
 
-                <div className="recommendation">
-                  <div className="recommendation-label">
-                    RECOMMENDED ALLOCATION
+            <section className="overview-card agent-log">
+              <div className="section-heading">
+                <div>
+                  <span className="section-kicker">03</span>
+                  <h2>Agent activity</h2>
+                </div>
+
+                <span className="card-label">LIVE LOG</span>
+              </div>
+
+              <div className="activity-list">
+                {result.agent_actions.map((action, index) => (
+                  <div className="activity-row" key={index}>
+                    <span className="activity-dot" />
+                    <span>{action}</span>
                   </div>
+                ))}
+              </div>
+            </section>
 
-                  <h3>
-                    Prioritize{" "}
-                    {result.recommendation.priority_locations.length}{" "}
-                    locations
-                  </h3>
+            <section className="overview-card">
+              <div className="section-heading">
+                <div>
+                  <span className="section-kicker">04</span>
+                  <h2>Incidents</h2>
+                </div>
 
-                  <p>{result.recommendation.message}</p>
+                <span className="card-label">
+                  {result.incidents.length} ACTIVE
+                </span>
+              </div>
 
-                  <div className="priority-list">
-                    {result.recommendation.priority_locations.map(
-                      (location, index) => (
-                        <div
-                          className="priority-item"
-                          key={location.location}
-                        >
-                          <span className="priority-index">
-                            0{index + 1}
+              {result.incidents.length === 0 ? (
+                <div className="empty-state">
+                  <h3>No incidents</h3>
+                  <p>
+                    All monitored workers are currently within the
+                    simulated safety state.
+                  </p>
+                </div>
+              ) : (
+                <div className="ranking">
+                  {result.incidents.map((incident) => (
+                    <div
+                      className="ranking-row"
+                      key={incident.id}
+                    >
+                      <div className="rank-number">
+                        {incident.id}
+                      </div>
+
+                      <div className="rank-info">
+                        <div className="rank-title">
+                          <span>
+                            Worker {incident.worker_id}
                           </span>
 
-                          <span>{location.location}</span>
-
-                          <strong>{location.heat_score}</strong>
+                          <strong>{incident.status}</strong>
                         </div>
-                      )
-                    )}
-                  </div>
+
+                        <small>{incident.type}</small>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
-          </div>
-        </section>
+              )}
+            </section>
+          </>
+        )}
+
+        {!result && !loading && !error && (
+          <section className="overview-card empty-state">
+            <div className="empty-icon">◎</div>
+
+            <h3>Agent standing by</h3>
+
+            <p>
+              Run the safety agent to begin environmental observation,
+              worker assessment, and autonomous response.
+            </p>
+          </section>
+        )}
 
         <section className="intelligence-strip">
           <div>
-            <span>DATA SOURCE</span>
-            <strong>FortyGuard thermal intelligence</strong>
+            <span>ENVIRONMENT</span>
+            <strong>FortyGuard intelligence</strong>
           </div>
 
           <div>
-            <span>DECISION MODEL</span>
-            <strong>Resource-constrained prioritization</strong>
+            <span>AGENT</span>
+            <strong>LangGraph · LangChain</strong>
           </div>
 
           <div>
-            <span>WORKFLOW</span>
-            <strong>FastAPI · LangGraph · LangChain</strong>
+            <span>EXECUTION</span>
+            <strong>Observe · Act · Escalate</strong>
           </div>
         </section>
       </main>
 
       <footer>
-        <span>HEAT RESOURCE OPTIMIZER</span>
-        <span>Decision support for heat resilience</span>
+        <span>SENTINEL</span>
+        <span>Autonomous environmental safety workforce</span>
       </footer>
     </div>
   );

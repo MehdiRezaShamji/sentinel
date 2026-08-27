@@ -1,23 +1,28 @@
 from langchain_core.tools import tool
 
-from app.services.fortyguard import (
-    get_environmental_data,
-    get_heatmap,
-)
+from app.services.fortyguard import get_environmental_data
 
 
 @tool
-def get_heatmap_tool(area: str, locations: list[str]) -> dict:
-    """Retrieve thermal conditions for candidate locations."""
-
-    return get_heatmap(area, locations)
-
-
-@tool
-def get_environmental_data_tool(
-    area: str,
-    locations: list[str],
+def observe_environment(
+    latitude: float,
+    longitude: float,
+    temperature: float,
+    date: str | None = None,
+    start_time: str | None = None,
 ) -> dict:
-    """Retrieve environmental conditions for candidate locations."""
+    """
+    Observe environmental conditions at a specific location.
 
-    return get_environmental_data(area, locations)
+    Uses FortyGuard to retrieve temperature, heat index,
+    apparent temperature, humidity, wet-bulb temperature,
+    precipitation, air quality, and solar conditions.
+    """
+
+    return get_environmental_data(
+        latitude=latitude,
+        longitude=longitude,
+        temperature=temperature,
+        date=date,
+        start_time=start_time,
+    )

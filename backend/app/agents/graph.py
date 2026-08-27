@@ -2,125 +2,193 @@ from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from app.tools.fortyguard_tools import (
-    get_environmental_data_tool,
-    get_heatmap_tool,
+from app.tools.fortyguard_tools import observe_environment
+from app.tools.worker_tools import (
+    create_incident,
+    escalate_incident,
+    get_active_workers,
+    send_checkin,
 )
 
 
-class AnalysisState(TypedDict):
-    area: str
-    candidate_locations: list[str]
-    available_resources: int
-    intervention_options: list[str]
+class SafetyAgentState(TypedDict):
+    latitude: float
+    longitude: float
+    temperature: float
+    environment: dict
+    workers: list[dict]
+    incidents: list[dict]
+    agent_actions: list[str]
+    current_step: str
 
-    heat_data: dict
-    environmental_data: dict
-    analysis: dict
-    recommendation: dict
 
-
-def retrieve_thermal_data(state: AnalysisState):
-    heat_data = get_heatmap_tool.invoke(
+def observe(state: SafetyAgentState):
+    environment = observe_environment.invoke(
         {
-            "area": state["area"],
-            "locations": state["candidate_locations"],
+            "latitude": state["latitude"],
+            "longitude": state["longitude"],
+            "temperature": state["temperature"],
+            "date": "2024-07-15",
+            "start_time": "14:00",
         }
     )
 
     return {
-        "heat_data": heat_data,
+        "environment": environment,
+        "current_step": "environment_observed",
     }
 
 
-def retrieve_environmental_data(state: AnalysisState):
-    environmental_data = get_environmental_data_tool.invoke(
+def load_workers(state: SafetyAgentState):
+    result = get_active_workers.invoke(
         {
-            "area": state["area"],
-            "locations": state["candidate_locations"],
-        }
-    )
-
-    return {
-        "environmental_data": environmental_data,
-    }
-
-
-def analyze_scenario(state: AnalysisState):
-    heat_data = state["heat_data"]
-
-    ranked_locations = sorted(
-        heat_data.items(),
-        key=lambda item: item[1]["heat_score"],
-        reverse=True,
-    )
-
-    analysis = {
-        "locations_evaluated": len(ranked_locations),
-        "heat_ranking": [
-            {
-                "location": location,
-                "heat_score": data["heat_score"],
+            "state": {
+                "workers": state["workers"],
+                "incidents": state["incidents"],
+                "agent_actions": [],
             }
-            for location, data in ranked_locations
-        ],
-    }
+        }
+    )
 
     return {
-        "analysis": analysis,
+        "workers": result["workers"],
+        "current_step": "workers_loaded",
     }
 
 
-def generate_recommendation(state: AnalysisState):
-    ranked_locations = state["analysis"]["heat_ranking"]
-    resources = state["available_resources"]
+def assess_workers(state: SafetyAgentState):
+    workers = [dict(worker) for worker in state["workers"]]
+    actions = list(state["agent_actions"])
 
-    selected_locations = ranked_locations[:resources]
+    heat_index = state["environment"].get("heat_index_c")
 
-    recommendation = {
-        "priority_locations": selected_locations,
-        "resources_used": len(selected_locations),
-        "message": (
-            f"Prioritized {len(selected_locations)} locations "
-            "based on thermal severity and available resources."
-        ),
-    }
+    if heat_index is None:
+        actions.append("Heat index unavailable; using temperature.")
+        risk_temperature = state["temperature"]
+    else:
+        risk_temperature = heat_index
+
+    for worker in workers:
+        if worker["status"] == "working":
+            if risk_temperature >= 35 and worker["exposure_minutes"] >= 45:
+                worker["status"] = "high_risk"
+
+                actions.append(
+                    f"High environmental exposure detected for " f"{worker['name']}"
+                )
+
+        if worker["status"] == "unresponsive":
+            actions.append(f"No response detected from {worker['name']}")
 
     return {
-        "recommendation": recommendation,
+        "workers": workers,
+        "agent_actions": actions,
+        "current_step": "workers_assessed",
+    }
+
+
+def execute_response(state: SafetyAgentState):
+    workers = state["workers"]
+    incidents = [dict(incident) for incident in state["incidents"]]
+    actions = list(state["agent_actions"])
+
+    for worker in workers:
+
+        if worker["status"] == "high_risk":
+            result = send_checkin.invoke(
+                {
+                    "state": {
+                        "workers": workers,
+                        "incidents": incidents,
+                        "agent_actions": actions,
+                    },
+                    "worker_id": worker["id"],
+                }
+            )
+
+            if result["success"]:
+                actions.append(f"Check-in sent to {worker['name']}")
+
+        elif worker["status"] == "unresponsive":
+
+            existing = next(
+                (
+                    incident
+                    for incident in incidents
+                    if incident["worker_id"] == worker["id"]
+                    and incident["status"] != "resolved"
+                ),
+                None,
+            )
+
+            if existing:
+                continue
+
+            result = create_incident.invoke(
+                {
+                    "state": {
+                        "workers": workers,
+                        "incidents": incidents,
+                        "agent_actions": actions,
+                    },
+                    "worker_id": worker["id"],
+                    "incident_type": "environmental_safety",
+                }
+            )
+
+            if result["success"]:
+                incident = next(
+                    incident
+                    for incident in incidents
+                    if incident["id"] == result["incident_id"]
+                )
+
+                actions.append(
+                    f"Created {result['incident_id']} " f"for {worker['name']}"
+                )
+
+                escalation = escalate_incident.invoke(
+                    {
+                        "state": {
+                            "workers": workers,
+                            "incidents": incidents,
+                            "agent_actions": actions,
+                        },
+                        "incident_id": result["incident_id"],
+                        "escalation_level": "supervisor",
+                    }
+                )
+
+                if escalation["success"]:
+                    incident["status"] = "escalated_supervisor"
+
+                    actions.append(
+                        f"Escalated {result['incident_id']} " "to supervisor"
+                    )
+
+    return {
+        "workers": workers,
+        "incidents": incidents,
+        "agent_actions": actions,
+        "current_step": "response_executed",
     }
 
 
 def build_graph():
-    graph = StateGraph(AnalysisState)
+    graph = StateGraph(SafetyAgentState)
 
-    graph.add_node("retrieve_thermal_data", retrieve_thermal_data)
-    graph.add_node(
-        "retrieve_environmental_data",
-        retrieve_environmental_data,
-    )
-    graph.add_node("analyze_scenario", analyze_scenario)
-    graph.add_node(
-        "generate_recommendation",
-        generate_recommendation,
-    )
+    graph.add_node("observe", observe)
+    graph.add_node("load_workers", load_workers)
+    graph.add_node("assess_workers", assess_workers)
+    graph.add_node("execute_response", execute_response)
 
-    graph.add_edge(START, "retrieve_thermal_data")
-    graph.add_edge(
-        "retrieve_thermal_data",
-        "retrieve_environmental_data",
-    )
-    graph.add_edge(
-        "retrieve_environmental_data",
-        "analyze_scenario",
-    )
-    graph.add_edge(
-        "analyze_scenario",
-        "generate_recommendation",
-    )
-    graph.add_edge("generate_recommendation", END)
+    graph.add_edge(START, "observe")
+    graph.add_edge("observe", "load_workers")
+    graph.add_edge("load_workers", "assess_workers")
+    graph.add_edge("assess_workers", "execute_response")
+    graph.add_edge("execute_response", END)
 
     return graph.compile()
 
 
-heat_resource_graph = build_graph()
+safety_agent_graph = build_graph()
