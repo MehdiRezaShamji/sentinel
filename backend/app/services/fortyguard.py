@@ -7,12 +7,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 FORTYGUARD_API_KEY = os.getenv("FORTYGUARD_API_KEY")
+
 FORTYGUARD_BASE_URL = "https://api.fortyguard.com/v1"
 
 
+class FortyGuardTimeout(RuntimeError):
+    pass
+
+
 def _headers() -> dict:
+
     if not FORTYGUARD_API_KEY:
-        raise RuntimeError("FORTYGUARD_API_KEY is not configured in backend/.env")
+        raise RuntimeError("FORTYGUARD_API_KEY is not configured " "in backend/.env")
 
     return {
         "api-key": FORTYGUARD_API_KEY,
@@ -21,32 +27,53 @@ def _headers() -> dict:
 
 
 def _poll_activity(activity_id: str) -> dict:
-    """Poll a FortyGuard activity until it completes."""
-
     url = f"{FORTYGUARD_BASE_URL}/status/{activity_id}"
 
-    for _ in range(30):
+    max_attempts = 120
+    poll_interval_seconds = 5
+
+    for attempt in range(max_attempts):
+
         response = requests.get(
             url,
             headers=_headers(),
-            timeout=30,
+            timeout=10,
         )
+
         response.raise_for_status()
 
         payload = response.json()
         data = payload.get("data", {})
 
-        status = data.get("status", "").lower()
+        status = data.get(
+            "status",
+            "",
+        ).lower()
 
-        if status == "completed":
-            return data.get("result", {})
+        if status in {
+            "completed",
+            "succeeded",
+        }:
+            return data.get(
+                "result",
+                {},
+            )
 
-        if status in {"failed", "error"}:
+        if status in {
+            "failed",
+            "error",
+        }:
             raise RuntimeError(f"FortyGuard activity failed: {payload}")
 
-        time.sleep(2)
+        # Still processing.
+        if attempt < max_attempts - 1:
+            time.sleep(poll_interval_seconds)
 
-    raise TimeoutError(f"FortyGuard activity {activity_id} timed out.")
+    raise FortyGuardTimeout(
+        f"FortyGuard activity {activity_id} "
+        f"did not complete within "
+        f"{max_attempts * poll_interval_seconds} seconds."
+    )
 
 
 def get_environmental_data(
@@ -56,13 +83,12 @@ def get_environmental_data(
     date: str | None = None,
     start_time: str | None = None,
 ) -> dict:
-    """Retrieve environmental intelligence from FortyGuard."""
 
     if date is None:
-        date = time.strftime("%Y-%m-%d")
+        date = "2024-07-15"
 
     if start_time is None:
-        start_time = time.strftime("%H:%M")
+        start_time = "14:00"
 
     payload = {
         "latitude": latitude,
@@ -79,7 +105,7 @@ def get_environmental_data(
         f"{FORTYGUARD_BASE_URL}/env_params",
         headers=_headers(),
         json=payload,
-        timeout=30,
+        timeout=5,
     )
 
     response.raise_for_status()
@@ -87,7 +113,7 @@ def get_environmental_data(
     submission = response.json()
 
     if submission.get("error"):
-        raise RuntimeError(f"FortyGuard submission failed: {submission}")
+        raise RuntimeError("FortyGuard submission failed: " f"{submission}")
 
     activity_id = submission["data"]["activity_id"]
 
@@ -96,26 +122,42 @@ def get_environmental_data(
     return _normalize_environment(result)
 
 
-def _normalize_environment(result: dict) -> dict:
-    """Convert FortyGuard's raw response into our application format."""
+def _normalize_environment(
+    result: dict,
+) -> dict:
 
-    locations = result.get("locations", [])
+    locations = result.get(
+        "locations",
+        [],
+    )
 
     if not locations:
-        raise RuntimeError("FortyGuard returned no location data.")
+        raise RuntimeError("FortyGuard returned no " "location data.")
 
     location = locations[0]
-    parameters = location.get("parameters", {})
-    solar = location.get("solar_irradiance", {})
-    clear_sky = solar.get("clear_sky", {})
+
+    parameters = location.get(
+        "parameters",
+        {},
+    )
+
+    solar = location.get(
+        "solar_irradiance",
+        {},
+    )
+
+    clear_sky = solar.get(
+        "clear_sky",
+        {},
+    )
 
     def first_value(key: str):
-        values = parameters.get(key, [])
-
-        if not values:
+        values = parameters.get(key)
+        if values is None:
             return None
-
-        return values[0]
+        if isinstance(values, list):
+            return values[0] if values else None
+        return values
 
     return {
         "latitude": location.get("lat"),
@@ -133,5 +175,8 @@ def _normalize_environment(result: dict) -> dict:
             "dni": clear_sky.get("dni"),
             "dhi": clear_sky.get("dhi"),
         },
-        "metadata": result.get("metadata", {}),
+        "metadata": result.get(
+            "metadata",
+            {},
+        ),
     }

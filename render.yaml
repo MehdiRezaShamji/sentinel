@@ -1,0 +1,35 @@
+# Render.com blueprint — one backend web service + one frontend static site.
+# Deploy with: Render Dashboard -> New -> Blueprint -> select this repo.
+# Set the sync:false variables in the Render dashboard when prompted.
+
+services:
+  - type: web
+    name: sentinel-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DEMO_MODE
+        value: "true"
+      - key: FORTYGUARD_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGIN_REGEX
+        sync: false
+
+  - type: web
+    name: sentinel-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false

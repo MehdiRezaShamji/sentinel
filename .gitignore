@@ -8,6 +8,10 @@ venv/
 # Environment variables
 .env
 
+# Databases
+*.db
+*.sqlite3
+
 # IDE
 .vscode/
 .idea/

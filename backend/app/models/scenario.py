@@ -10,6 +10,12 @@ class Worker(BaseModel):
     exposure_minutes: int = Field(default=0, ge=0)
     status: str = "working"
     buddy_id: str | None = None
+    phone: str | None = None
+    check_in_status: str | None = None
+    check_in_sent_at: str | None = None
+    check_in_timeout_seconds: int = 300
+    buddy_verification_status: str | None = None
+    buddy_notified_at: str | None = None
 
 
 class Incident(BaseModel):
