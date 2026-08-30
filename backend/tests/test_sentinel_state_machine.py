@@ -221,7 +221,7 @@ class TestSentinelStateMachine(unittest.TestCase):
         for worker in res["workers"]:
             self.assertEqual(worker["status"], "working")
 
-    def test_workers_not_marked_high_risk_before_first_success(self):
+    def test_workers_marked_high_risk_on_fallback_environment(self):
         state = build_demo_state()
         
         # Simulate a failed initial refresh that populates fallback environment
@@ -234,11 +234,52 @@ class TestSentinelStateMachine(unittest.TestCase):
         }
         reset_monitoring_state(state)
         
-        # Run cycle: workers should NOT be marked high-risk because it's a demo/fallback environment
+        # Run cycle: workers (Alex and Sam) should be marked high-risk and awaiting checkin
         res = _run_local_monitoring_cycle(state)
         alex = next(w for w in res["workers"] if w["id"] == "W001")
-        self.assertEqual(alex["status"], "working")
-        self.assertIsNone(alex["check_in_status"])
+        self.assertEqual(alex["status"], "awaiting_checkin")
+        self.assertEqual(alex["check_in_status"], "pending")
+
+    def test_initial_fortyguard_refresh_timeout_runs_fallback_demo_high_risk_evaluation(self):
+        state = build_demo_state()
+        reset_monitoring_state(state)
+        
+        # Simulate initial FortyGuard refresh timeout error
+        def mock_get_env_timeout(*args, **kwargs):
+            raise Exception("FortyGuardTimeout: FortyGuard refresh timed out after 12.0s bound in DEMO_MODE")
+        
+        original_get_env = app.services.monitor.get_environmental_data
+        try:
+            app.services.monitor.get_environmental_data = mock_get_env_timeout
+            
+            # Execute async refresh worker synchronously to simulate initial FortyGuard failure
+            app.services.monitor._async_refresh_worker(state)
+            
+            ms = app.services.monitor.monitoring_state
+            self.assertEqual(ms["current_step"], "environment_refresh_failed")
+            self.assertEqual(ms["environment"]["metadata"]["source"], "fallback_demo")
+            self.assertEqual(ms["environment"]["heat_index_c"], 36.8)
+            
+            # Run local monitoring cycle following the refresh failure
+            res = _run_local_monitoring_cycle(ms)
+            
+            # Alex and Sam must be detected as high environmental exposure and receive Telegram check-in
+            alex = next(w for w in res["workers"] if w["id"] == "W001")
+            sam = next(w for w in res["workers"] if w["id"] == "W003")
+            
+            self.assertEqual(alex["status"], "awaiting_checkin")
+            self.assertEqual(alex["check_in_status"], "pending")
+            self.assertIsNotNone(alex["check_in_sent_at"])
+            
+            self.assertEqual(sam["status"], "awaiting_checkin")
+            self.assertEqual(sam["check_in_status"], "pending")
+            self.assertIsNotNone(sam["check_in_sent_at"])
+            
+            # Verify Telegram check-in sent
+            alex_sms = next(s for s in self.sent_sms if s["to"] == alex["phone"])
+            self.assertIn("Are you safe", alex_sms["body"])
+        finally:
+            app.services.monitor.get_environmental_data = original_get_env
 
     def test_successful_fortyguard_refresh_enables_risk_evaluation(self):
         state = build_demo_state()

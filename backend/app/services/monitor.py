@@ -355,8 +355,8 @@ def _assess_workers_locally(
     workers = state.get("workers", [])
     environment = state.get("environment", {})
 
-    # Check if we have valid environmental data (i.e. not empty and not fallback)
-    has_valid_env = bool(environment) and environment.get("metadata", {}).get("source") != "fallback_demo"
+    # Check if we have valid environmental data (i.e. not empty)
+    has_valid_env = bool(environment)
 
     if not has_valid_env:
         # DO NOT evaluate worker environmental risk until valid environmental data exists.
