@@ -421,13 +421,20 @@ def _check_timeouts_locally(
                 worker["check_in_sent_at"] = _utc_timestamp()
                 
                 check_in_msg = "Sentinel safety check-in: Are you safe? Reply SAFE or NOT SAFE."
-                _send_msg(_get_worker_telegram_destination(worker), check_in_msg)
-                
-                log_label = "[TELEGRAM]"
-                _append_action(
-                    state,
-                    f"{log_label} Sentinel safety check-in sent to {worker['name']}."
-                )
+                send_result = _send_msg(_get_worker_telegram_destination(worker), check_in_msg)
+
+                # Only report success if Telegram actually confirmed delivery.
+                if send_result.get("success"):
+                    _append_action(
+                        state,
+                        f"[TELEGRAM] Sentinel safety check-in sent to {worker['name']}."
+                    )
+                else:
+                    _append_action(
+                        state,
+                        f"[TELEGRAM ERROR] Failed to send safety check-in to {worker['name']}: "
+                        f"{send_result.get('error', 'unknown error')}"
+                    )
 
         # B. Check for check-in response timeout
         elif worker.get("status") == "awaiting_checkin" and worker.get("check_in_status") == "pending":
@@ -462,13 +469,19 @@ def _check_timeouts_locally(
                                 f"Sentinel alert: {worker['name']} has not responded to a safety check-in. "
                                 f"Please check on {worker['name']} and reply SAFE or NOT SAFE."
                             )
-                            _send_msg(_get_worker_telegram_destination(buddy), buddy_msg)
-                            
-                            log_label = "[TELEGRAM]"
-                            _append_action(
-                                state,
-                                f"{log_label} Buddy verification alert sent to {buddy['name']} for {worker['name']}."
-                            )
+                            send_result = _send_msg(_get_worker_telegram_destination(buddy), buddy_msg)
+
+                            if send_result.get("success"):
+                                _append_action(
+                                    state,
+                                    f"[TELEGRAM] Buddy verification alert sent to {buddy['name']} for {worker['name']}."
+                                )
+                            else:
+                                _append_action(
+                                    state,
+                                    f"[TELEGRAM ERROR] Failed to send buddy verification alert to {buddy['name']} "
+                                    f"for {worker['name']}: {send_result.get('error', 'unknown error')}"
+                                )
                         else:
                             # Direct supervisor escalation fallback if no buddy is found
                             worker["buddy_verification_status"] = "no_buddy"
@@ -512,13 +525,19 @@ def _check_timeouts_locally(
                                 f"SENTINEL ALERT: {worker['name']} has not responded to a safety check-in. "
                                 f"Buddy verification unavailable. Incident {incident_id}."
                             )
-                            _send_msg(SUPERVISOR_PHONE, supervisor_msg)
-                            
-                            log_label = "[TELEGRAM]"
-                            _append_action(
-                                state,
-                                f"{log_label} Supervisor notified for {worker['name']}. Incident {incident_id}."
-                            )
+                            send_result = _send_msg(SUPERVISOR_PHONE, supervisor_msg)
+
+                            if send_result.get("success"):
+                                _append_action(
+                                    state,
+                                    f"[TELEGRAM] Supervisor notified for {worker['name']}. Incident {incident_id}."
+                                )
+                            else:
+                                _append_action(
+                                    state,
+                                    f"[TELEGRAM ERROR] Failed to notify supervisor for {worker['name']}. "
+                                    f"Incident {incident_id}: {send_result.get('error', 'unknown error')}"
+                                )
 
                             # Emergency action
                             if emergency_response_enabled:
@@ -887,13 +906,19 @@ def handle_sms_response(sender: str, body: str) -> dict:
                             f"SENTINEL ALERT: Worker {worker['name']} reported NOT SAFE in response to a safety check-in. "
                             f"Incident {incident_id}."
                         )
-                        _send_msg(SUPERVISOR_PHONE, supervisor_msg)
-                        
-                        log_label = "[TELEGRAM]"
-                        _append_action(
-                            monitoring_state,
-                            f"{log_label} Supervisor notified for {worker['name']}. Incident {incident_id}."
-                        )
+                        send_result = _send_msg(SUPERVISOR_PHONE, supervisor_msg)
+
+                        if send_result.get("success"):
+                            _append_action(
+                                monitoring_state,
+                                f"[TELEGRAM] Supervisor notified for {worker['name']}. Incident {incident_id}."
+                            )
+                        else:
+                            _append_action(
+                                monitoring_state,
+                                f"[TELEGRAM ERROR] Failed to notify supervisor for {worker['name']}. "
+                                f"Incident {incident_id}: {send_result.get('error', 'unknown error')}"
+                            )
 
                         # Simulated Emergency Dispatch
                         if emergency_response_enabled:
@@ -986,13 +1011,19 @@ def handle_sms_response(sender: str, body: str) -> dict:
                                 f"SENTINEL ALERT: {worker['name']} has not responded to a safety check-in. "
                                 f"Buddy verification indicates the worker may need assistance. Incident {incident_id}."
                             )
-                            _send_msg(SUPERVISOR_PHONE, supervisor_msg)
-                            
-                            log_label = "[TELEGRAM]"
-                            _append_action(
-                                monitoring_state,
-                                f"{log_label} Supervisor notified for {worker['name']}. Incident {incident_id}."
-                            )
+                            send_result = _send_msg(SUPERVISOR_PHONE, supervisor_msg)
+
+                            if send_result.get("success"):
+                                _append_action(
+                                    monitoring_state,
+                                    f"[TELEGRAM] Supervisor notified for {worker['name']}. Incident {incident_id}."
+                                )
+                            else:
+                                _append_action(
+                                    monitoring_state,
+                                    f"[TELEGRAM ERROR] Failed to notify supervisor for {worker['name']}. "
+                                    f"Incident {incident_id}: {send_result.get('error', 'unknown error')}"
+                                )
 
                             # Simulated Emergency Dispatch
                             if emergency_response_enabled:

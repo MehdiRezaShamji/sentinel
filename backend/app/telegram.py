@@ -135,21 +135,29 @@ def send_telegram_message(chat_id: str, message: str) -> dict:
     }
     try:
         response = requests.post(url, json=payload, timeout=10)
-        if response.status_code in (200, 201):
+        # Telegram signals API-level failure via ok=false in the JSON body
+        # (even alongside an HTTP 200), so both must be checked.
+        try:
+            data = response.json()
+        except Exception:
+            data = {}
+        if response.status_code == 200 and data.get("ok") is True:
             return {
                 "success": True,
                 "demo": False,
-                "sid": response.json().get("result", {}).get("message_id"),
+                "sid": data.get("result", {}).get("message_id"),
                 "body": message
             }
-        else:
-            print(f"[TELEGRAM ERROR] Telegram API failed: {response.text}")
-            return {
-                "success": False,
-                "demo": False,
-                "error": response.text,
-                "body": message
-            }
+        error_detail = data.get("description") if isinstance(data, dict) else None
+        if not error_detail:
+            error_detail = response.text[:300] or f"HTTP {response.status_code}"
+        print(f"[TELEGRAM ERROR] sendMessage rejected (HTTP {response.status_code}): {error_detail}")
+        return {
+            "success": False,
+            "demo": False,
+            "error": error_detail,
+            "body": message
+        }
     except Exception as e:
         print(f"[TELEGRAM EXCEPTION] Failed: {e}")
         return {
