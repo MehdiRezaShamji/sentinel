@@ -13,12 +13,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    # Localhost by default; override for deployed frontends, e.g.
-    # ALLOWED_ORIGIN_REGEX=^https://sentinel-frontend\.onrender\.com$
-    allow_origin_regex=os.getenv(
-        "ALLOWED_ORIGIN_REGEX",
-        r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-    ),
+    allow_origins=[
+        "https://sentinel-frontend-mqli.onrender.com",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
