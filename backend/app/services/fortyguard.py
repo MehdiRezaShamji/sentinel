@@ -32,6 +32,13 @@ def _poll_activity(activity_id: str) -> dict:
     max_attempts = 120
     poll_interval_seconds = 5
 
+    # Demo-safe bound: cap polling to ~12s so a slow FortyGuard activity
+    # falls back to the demo environment instead of leaving the monitor
+    # stuck at "starting" for up to 10 minutes.
+    if os.getenv("DEMO_MODE", "false").lower() == "true":
+        max_attempts = 3
+        poll_interval_seconds = 4
+
     for attempt in range(max_attempts):
 
         response = requests.get(
